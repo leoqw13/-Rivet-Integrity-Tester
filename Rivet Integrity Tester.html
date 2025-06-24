@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rivet Integrity Tester</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    #canvas {
+      width: 100%;
+      height: 100%;
+      
+    }
+    @media (max-width: 1024px) {
+      #results-panel {
+        height: auto;
+        overflow-y: auto;
+      }
+      #canvas-panel {
+        height: 50vh;
+      }
+    }
+    @media (max-width: 640px) {
+      #controls-panel {
+        display: none;
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+      }
+      #controls-panel.is-open {
+        display: block;
+        opacity: 1;
+        transform: translateY(0);
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      #canvas-panel {
+        height: 40vh;
+        flex-grow: 1;
+      }
+      #results-panel {
+        padding: 1rem;
+      }
+      header {
+        padding: 0.75rem 1rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+      }
+      .text-sm {
+        font-size: 0.75rem;
+      }
+      button {
+        padding: 0.5rem 1rem;
+        font-size: 0.75rem;
+      }
+      table {
+        font-size: 0.75rem;
+      }
+      th, td {
+        padding: 0.5rem;
+      }
+    }
+    html.dark #controls-panel,
+    html.dark #results-panel,
+    html.dark header,
+    html.dark #saved-tests-modal {
+      background-color: #0f1c2e;
+    }
+    html.dark .text-teal-900,
+    html.dark .text-teal-800,
+    html.dark .text-teal-600 {
+      color: white !important;
+    }
+    html.dark .text-teal-700 {
+      color: #00BBA7;
+    }
+    html.dark tr {
+      background-color: rgba(255, 255, 255, 0.07);
+      color: white;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    html.dark select {
+      background-color: rgba(255, 255, 255, 0.07);
+    }
+    #toggle-controls-btn {
+      background-color: #457b9d;
+    }
+    html.dark #toggle-controls-btn {
+      background-color: #3a6680;
+      color: white;
+    }
+    #results-panel table thead,
+    #saved-tests-table thead {
+      background-color: #457b9d;
+    }
+    html.dark #results-panel table thead,
+    html.dark #saved-tests-table thead {
+      background-color: #3a6680;
+    }
+    /* Modal Styles */
+    #saved-tests-modal {
+      transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+      transform: translate(-50%, -50%) scale(0.95);
+      opacity: 0;
+    }
+    #saved-tests-modal:not(.hidden) {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+    #saved-tests-table {
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+    @media (max-width: 640px) {
+      #saved-tests-modal {
+        max-width: 90%;
+      }
+      #saved-tests-table {
+        font-size: 0.65rem;
+      }
+      #saved-tests-table th,
+      #saved-tests-table td {
+        padding: 0.25rem;
+      }
+    }
+  </style>
+</head>
+<body class="font-[Montserrat] m-0 bg-gray-100 text-gray-900 transition-colors duration-300">
+  <header class="flex justify-between items-center p-5 bg-white shadow">
+    <h1 class="text-1xl font-bold tracking-tight text-transparent sm:text-2xl md:text-3xl bg-clip-text bg-gradient-to-tr to-teal-500 from-sky-400">
+      Rivet Integrity Tester
+    </h1>
+    <label class="flex items-center cursor-pointer">
+      <span id="theme-label" class="text-sm font-medium text-teal-800 mr-2">Dark Mode</span>
+      <input id="theme-toggle" type="checkbox" value="" class="sr-only peer">
+      <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-400 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+    </label>
+  </header>
+  <div class="flex flex-col lg:flex-row h-[calc(100vh-80px)] overflow-auto">
+    <button id="toggle-controls-btn" class="block sm:hidden text-white font-medium text-xl px-4 py-2 flex items-center gap-2 z-10">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+      </svg>
+      Controls
+    </button>
+    <!-- Controls Panel (Left) -->
+    <div id="controls-panel" class="w-full lg:w-1/4 bg-white shadow-lg z-20 px-6 pt-2">
+      <div class="mb-4">
+        <label for="industry" class="block text-sm font-light text-teal-900 mb-2">Industry</label>
+        <select id="industry" class="bg-gray-50 cursor-pointer w-full p-2 border text-teal-700 border-teal-500 outline-none focus:ring-3 focus:ring-teal-500/65 rounded-lg">
+          <option value="aerospace">Aerospace</option>
+          <option value="shipbuilding">Shipbuilding</option>
+          <option value="structural">Structural Engineering</option>
+        </select>
+      </div>
+      <div class="mb-4">
+        <label for="rivet" class="block text-sm font-light text-teal-900 mb-2">Rivet Type</label>
+        <select id="rivet" class="bg-gray-50 cursor-pointer w-full p-2 border text-teal-700 border-teal-500 outline-none focus:ring-3 focus:ring-teal-500/65 rounded-lg"></select>
+      </div>
+      <div class="mb-4">
+        <label for="shear-force" class="block text-sm font-light text-teal-900 mb-1">Shear Force (kN)</label>
+        <input type="range" id="shear-force" min="0" max="100" value="0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500 [&::-webkit-slider-thumb]:border-none [&::-webkit-slider-thumb]:shadow [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-500 [&::-moz-range-thumb]:border-none">
+        <span id="shear-value" class="text-sm text-teal-800">0 kN</span>
+      </div>
+      <div class="mb-4">
+        <label for="tensile-force" class="block text-sm font-light text-teal-900 mb-1">Tensile Force (kN)</label>
+        <input type="range" id="tensile-force" min="0" max="100" value="0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-teal-500 [&::-webkit-slider-thumb]:border-none [&::-webkit-slider-thumb]:shadow [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-teal-500 [&::-moz-range-thumb]:border-none">
+        <span id="tensile-value" class="text-sm text-teal-800">0 kN</span>
+        <button id="reset-btn" type="button" class="w-full mt-4 text-white bg-gradient-to-r from-rose-400 via-rose-500 to-rose-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-rose-300 shadow-lg shadow-rose-500/40 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Reload Simulation</button>
+      </div>
+    </div>
+    <!-- Canvas Panel (Center) -->
+
+    <div id="canvas-panel" class="w-full lg:w-1/2">
+      <div id="canvas" class="w-full h-full"></div>
+    </div>
+
+    <!-- Results Panel (Right) -->
+    <div id="results-panel" class="px-6 pt-2 w-full lg:w-1/4 bg-white shadow-lg">
+      <div class="results mb-4">
+        <h2 class="text-lg font-semibold mb-2 text-teal-900">Test Results</h2>
+        <table class="w-full text-sm text-left rtl:text-right text-gray-500">
+          <thead class="text-xs text-white uppercase">
+            <tr>
+              <th scope="col" class="px-6 py-3">Variable</th>
+              <th scope="col" class="px-6 py-3">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="bg-white border-b border-gray-200">
+              <td class="px-6 py-4">Integrity Score</td>
+              <td id="integrity-score" class="px-6 py-4">100</td>
+            </tr>
+            <tr class="bg-white border-b border-gray-200">
+              <td class="px-6 py-4">Material</td>
+              <td id="material-value" class="px-6 py-4">100</td>
+            </tr>
+            <tr class="bg-white border-b border-gray-200">
+              <td class="px-6 py-4">Diameter</td>
+              <td id="diameter-value" class="px-6 py-4">100</td>
+            </tr>
+            <tr class="bg-white border-b border-gray-200">
+              <td class="px-6 py-4">Shear Strength</td>
+              <td id="strength-value" class="px-6 py-4">100</td>
+            </tr>
+          </tbody>
+        </table>
+        <p id="rivet-details" class="text-sm"></p>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="save-btn" type="button" class="text-white bg-gradient-to-r from-teal-400 via-teal-500 to-teal-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-teal-300 shadow-lg shadow-teal-500/40 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Save Results</button>
+        <button id="export-btn" type="button" class="text-white bg-gradient-to-r from-cyan-400 via-cyan-500 to-cyan-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-cyan-300 shadow-lg shadow-cyan-500/40 font-medium rounded-lg text-sm px-5 py-2.5 text-center">Export Report</button>
+      </div>
+      <button id="saved-tests-btn" type="button" class="w-full mt-4 text-white bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-blue-300 shadow-lg shadow-blue-500/40 font-medium rounded-lg text-sm px-5 py-2.5 text-center">See Saved Tests</button>
+    </div>
+  </div>
+
+  <!-- Alert -->
+  <div id="alert" class="duration-500 ease-out hidden opacity-0 fixed z-50 top-20 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center p-4 text-sm text-red-800 border border-red-300 rounded-lg bg-red-50" role="alert">
+    <svg class="shrink-0 inline w-4 h-4 me-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/>
+    </svg>
+    <span class="sr-only">Info</span>
+    <div>
+      <span class="font-medium">Test Failed!</span> The rivet is broken due to the tension applied.
+    </div>
+  </div>
+
+  <!-- Saved Tests Modal -->
+  <div id="modal-backdrop" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40"></div>
+  <div id="saved-tests-modal" class="hidden fixed z-50 top-1/2 left-1/2 bg-white rounded-lg shadow-lg p-6 max-w-lg w-full" aria-modal="true" role="dialog">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-semibold text-teal-900 dark:text-white">Saved Tests</h2>
+      <button id="close-modal-btn" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div id="saved-tests-table" class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+      <table class="w-full">
+        <thead class="text-xs text-white uppercase">
+          <tr>
+            <th scope="col" class="px-4 py-2">Date</th>
+            <th scope="col" class="px-4 py-2">Industry</th>
+            <th scope="col" class="px-4 py-2">Rivet</th>
+            <th scope="col" class="px-4 py-2">Shear (kN)</th>
+            <th scope="col" class="px-4 py-2">Tensile (kN)</th>
+            <th scope="col" class="px-4 py-2">Score</th>
+          </tr>
+        </thead>
+        <tbody id="saved-tests-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Rivet Data
+    const rivetData = {
+      aerospace: [
+        { id: 'aero1', material: 'Titanium', diameter: 4.8, shearStrength: 50 },
+        { id: 'aero2', material: 'Aluminum', diameter: 6.4, shearStrength: 40 }
+      ],
+      shipbuilding: [
+        { id: 'ship1', material: 'Steel', diameter: 12.7, shearStrength: 80 },
+        { id: 'ship2', material: 'Stainless Steel', diameter: 15.9, shearStrength: 90 }
+      ],
+      structural: [
+        { id: 'struct1', material: 'Carbon Steel', diameter: 19.1, shearStrength: 100 },
+        { id: 'struct2', material: 'Alloy Steel', diameter: 22.2, shearStrength: 120 }
+      ]
+    };
+
+    // Three.js Setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    const canvasContainer = document.getElementById('canvas');
+    renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    canvasContainer.appendChild(renderer.domElement);
+    camera.position.z = 4;
+
+    let rivetMesh;
+    let failed = false;
+
+    function createRivetGeometry(startAngle = 0, endAngle = Math.PI * 2) {
+      const points = [
+        new THREE.Vector2(0, -1),
+        new THREE.Vector2(0.5, -1),
+        new THREE.Vector2(0.5, -0.2),
+        new THREE.Vector2(0.8, 0),
+        new THREE.Vector2(0.8, 0.3),
+        new THREE.Vector2(0.6, 0.5),
+        new THREE.Vector2(0, 0.5)
+      ];
+      const geometry = new THREE.LatheGeometry(points, 32, startAngle, endAngle - startAngle);
+      return geometry;
+    }
+
+    const textureLoader = new THREE.TextureLoader();
+    const rivetMaterial = new THREE.MeshStandardMaterial({
+      metalness: 0.9,
+      roughness: 0.4,
+      side: THREE.DoubleSide 
+    });
+
+    const rivetGeometry = createRivetGeometry();
+    rivetMesh = new THREE.Mesh(rivetGeometry, rivetMaterial);
+    scene.add(rivetMesh);
+
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    directionalLight.position.set(1, 1, 1);
+    scene.add(directionalLight);
+    const pointLight = new THREE.PointLight(0xffffff, 1, 10);
+    pointLight.position.set(-2, 2, 2);
+    scene.add(pointLight);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (!failed) {
+        rivetMesh.rotation.y += 0.01;
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // UI Elements
+    const industrySelect = document.getElementById('industry');
+    const rivetSelect = document.getElementById('rivet');
+    const shearForce = document.getElementById('shear-force');
+    const tensileForce = document.getElementById('tensile-force');
+    const shearValue = document.getElementById('shear-value');
+    const tensileValue = document.getElementById('tensile-value');
+    const integrityScore = document.getElementById('integrity-score');
+    const materialRow = document.getElementById('material-value');
+    const diameterRow = document.getElementById('diameter-value');
+    const strengthRow = document.getElementById('strength-value');
+    const saveBtn = document.getElementById('save-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const themeToggle = document.getElementById('theme-toggle');
+    const resetBtn = document.getElementById('reset-btn');
+    const toggleControlsBtn = document.getElementById('toggle-controls-btn');
+    const savedTestsBtn = document.getElementById('saved-tests-btn');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const savedTestsModal = document.getElementById('saved-tests-modal');
+    const savedTestsBody = document.getElementById('saved-tests-body');
+
+    // Toggle Controls Panel
+    toggleControlsBtn.addEventListener('click', () => {
+      const controlsPanel = document.getElementById('controls-panel');
+      controlsPanel.classList.toggle('is-open');
+      const isOpen = controlsPanel.classList.contains('is-open');
+      toggleControlsBtn.querySelector('svg').innerHTML = isOpen
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>';
+    });
+
+    // Update Rivet Options
+    function updateRivetOptions(industry) {
+      rivetSelect.innerHTML = '';
+      rivetData[industry].forEach(rivet => {
+        const option = document.createElement('option');
+        option.value = rivet.id;
+        option.textContent = `${rivet.material} (${rivet.diameter}mm)`;
+        rivetSelect.appendChild(option);
+      });
+      updateRivetDetails();
+    }
+
+    function redToGreenHex(value) {
+      value = Math.max(0, Math.min(1, value));
+      const r = Math.round(255 * (1 - value));
+      const g = Math.round(255 * value);
+      const b = 0;
+      const hex = (n) => n.toString(16).padStart(2, '0');
+      return `0x${hex(r)}${hex(g)}${hex(b)}`;
+    }
+
+    function updateRivetDetails() {
+      const industry = industrySelect.value;
+      const rivetId = rivetSelect.value;
+      const rivet = rivetData[industry].find(r => r.id === rivetId);
+      materialRow.textContent = rivet.material;
+      diameterRow.textContent = rivet.diameter + 'mm';
+      strengthRow.textContent = rivet.shearStrength + 'kN';
+
+      const shear = parseFloat(shearForce.value);
+      const tensile = parseFloat(tensileForce.value);
+      const stress = shear / rivet.shearStrength + tensile / (rivet.shearStrength * 0.5);
+      const score = Math.max(0, 100 - stress * 100);
+      integrityScore.textContent = `${Math.round(score)}`;
+
+      rivetMesh.scale.set(1, 1 + tensile * 0.01, 1);
+      rivetMesh.position.x = shear * 0.02;
+
+      if (!failed) {
+        const stressColor = new THREE.Color(redToGreenHex(1 - (shear / rivet.shearStrength)));
+        rivetMaterial.color.set(stressColor).multiplyScalar(0.5);
+      }
+
+      if (shear > rivet.shearStrength && !failed) {
+        const alertDiv = document.getElementById('alert');
+        alertDiv.classList.remove('hidden');
+        setTimeout(() => {
+          alertDiv.classList.remove('opacity-0');
+        }, 100);
+        failed = true;
+
+        const leftGeometry = createRivetGeometry(0, Math.PI); 
+        const rightGeometry = createRivetGeometry(Math.PI, Math.PI * 2);
+        const fragment1 = new THREE.Mesh(leftGeometry, rivetMaterial);
+        const fragment2 = new THREE.Mesh(rightGeometry, rivetMaterial);
+
+       
+        fragment1.position.set(0.1, 0, 0); 
+        fragment2.position.set(-0.1, 0, 0); 
+
+   
+        scene.remove(rivetMesh);
+        scene.add(fragment1);
+        scene.add(fragment2);
+
+     
+        let t = 0;
+        const failAnimation = setInterval(() => {
+          t += 0.1;
+          fragment1.position.x += 0.05;
+          fragment2.position.x -= 0.05;
+          if (t > 2) clearInterval(failAnimation);
+        }, 16);
+      }
+    }
+
+    industrySelect.addEventListener('change', () => {
+      updateRivetOptions(industrySelect.value);
+      updateRivetDetails();
+    });
+    rivetSelect.addEventListener('change', updateRivetDetails);
+    shearForce.addEventListener('input', () => {
+      shearValue.textContent = `${shearForce.value} kN`;
+      updateRivetDetails();
+    });
+    tensileForce.addEventListener('input', () => {
+      tensileValue.textContent = `${tensileForce.value} kN`;
+      updateRivetDetails();
+    });
+
+    // Save Results
+    saveBtn.addEventListener('click', () => {
+      const industry = industrySelect.value;
+      const rivetId = rivetSelect.value;
+      const rivet = rivetData[industry].find(r => r.id === rivetId);
+      const result = {
+        industry,
+        rivet,
+        shearForce: shearForce.value,
+        tensileForce: tensileForce.value,
+        integrityScore: parseInt(integrityScore.textContent),
+        timestamp: new Date().toISOString()
+      };
+      let results = JSON.parse(localStorage.getItem('rivetTests') || '[]');
+      results.push(result);
+      localStorage.setItem('rivetTests', JSON.stringify(results));
+      alert('Results saved!');
+    });
+
+    // Export Report
+    exportBtn.addEventListener('click', () => {
+      const industry = industrySelect.value;
+      const rivetId = rivetSelect.value;
+      const rivet = rivetData[industry].find(r => r.id === rivetId);
+      const report = `
+        Rivet Integrity Test Report
+        Date: ${new Date().toISOString()}
+        Industry: ${industry}
+        Rivet: ${rivet.material}, ${rivet.diameter}mm
+        Shear Strength: ${rivet.shearStrength}kN
+        Applied Shear Force: ${shearForce.value}kN
+        Applied Tensile Force: ${tensileForce.value}kN
+        Integrity Score: ${integrityScore.textContent}
+      `;
+      const blob = new Blob([report], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'rivet_test_report.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Theme Toggle
+    themeToggle.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    });
+
+    // Reset Simulation
+    resetBtn.addEventListener('click', () => {
+      location.reload();
+    });
+
+    // Saved Tests Modal
+    function populateSavedTests() {
+      const tests = JSON.parse(localStorage.getItem('rivetTests') || '[]');
+      savedTestsBody.innerHTML = '';
+      if (tests.length === 0) {
+        savedTestsBody.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center">No saved tests found.</td></tr>';
+        return;
+      }
+      tests.forEach(test => {
+        const row = document.createElement('tr');
+        row.className = 'bg-white border-b dark:bg-gray-800 dark:border-gray-700';
+        row.innerHTML = `
+          <td class="px-4 py-2">${new Date(test.timestamp).toLocaleString()}</td>
+          <td class="px-4 py-2">${test.industry}</td>
+          <td class="px-4 py-2">${test.rivet.material} (${test.rivet.diameter}mm)</td>
+          <td class="px-4 py-2">${test.shearForce}</td>
+          <td class="px-4 py-2">${test.tensileForce}</td>
+          <td class="px-4 py-2">${test.integrityScore}</td>
+        `;
+        savedTestsBody.appendChild(row);
+      });
+    }
+
+    savedTestsBtn.addEventListener('click', () => {
+      populateSavedTests();
+      modalBackdrop.classList.remove('hidden');
+      savedTestsModal.classList.remove('hidden');
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+      savedTestsModal.classList.add('hidden');
+      modalBackdrop.classList.add('hidden');
+    });
+
+    modalBackdrop.addEventListener('click', () => {
+      savedTestsModal.classList.add('hidden');
+      modalBackdrop.classList.add('hidden');
+    });
+
+    // Initialize
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+      themeToggle.checked = true;
+    }
+    updateRivetOptions(industrySelect.value);
+    updateRivetDetails();
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+      const width = canvasContainer.clientWidth;
+      const height = canvasContainer.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    });
+  </script>
+</body>
+</html>
